@@ -1,10 +1,13 @@
 -- SERVICES
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui") -- Uses CoreGui for safety (Exploit-friendly)
+local CoreGui = game:GetService("CoreGui")
 
 -- CONFIGURATION
-local CAR_NAME = "noahh8839"
+local player = Players.LocalPlayer
+-- FIX: Automatically use the current account's username
+local CAR_NAME = player.Name 
+
 local DRIVE_SPEED = 591
 local START_POS = Vector3.new(4846, 8, 19120)
 local DIRECTION = Vector3.new(0, 0, 1)
@@ -12,11 +15,9 @@ local DIRECTION = Vector3.new(0, 0, 1)
 -- STATE VARIABLES
 local farming = false
 local heartBeatConnection = nil
-local player = Players.LocalPlayer
 
--- 1. UI CREATION (Clean Toggle Button)
+-- 1. UI CREATION
 local ScreenGui = Instance.new("ScreenGui")
--- Check context: If regular Studio, use PlayerGui. If Exploit, try CoreGui.
 if pcall(function() return CoreGui end) then
     ScreenGui.Parent = CoreGui
 else
@@ -27,8 +28,8 @@ ScreenGui.Name = "AutoFarmUI"
 local ToggleBtn = Instance.new("TextButton")
 ToggleBtn.Name = "ToggleBtn"
 ToggleBtn.Parent = ScreenGui
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113) -- Green (Start)
-ToggleBtn.Position = UDim2.new(0.1, 0, 0.1, 0) -- Top Left
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+ToggleBtn.Position = UDim2.new(0.1, 0, 0.1, 0)
 ToggleBtn.Size = UDim2.new(0, 150, 0, 50)
 ToggleBtn.Font = Enum.Font.GothamBold
 ToggleBtn.Text = "START FARM"
@@ -44,28 +45,26 @@ Corner.Parent = ToggleBtn
 -- 2. FUNCTIONS
 
 local function StopFarm()
-    -- A. Disconnect Loop
+    -- Disconnect loop
     if heartBeatConnection then
         heartBeatConnection:Disconnect()
         heartBeatConnection = nil
     end
     
-    -- B. Reset Physics (Your logic)
+    -- Reset Physics
+    -- FIX: Use the dynamic CAR_NAME here
     local car = workspace.AVehicleStorage:FindFirstChild(CAR_NAME)
     local seat = car and car:FindFirstChildWhichIsA("VehicleSeat", true)
     
     if seat then
-        -- Kill forces
         seat.AssemblyLinearVelocity = Vector3.zero
         seat.AssemblyAngularVelocity = Vector3.zero
-        
-        -- Anchor reset to strictly kill momentum
         seat.Anchored = true
         task.wait(0.1)
         seat.Anchored = false
     end
     
-    -- C. Restore Traffic Collisions
+    -- Restore Traffic
     local traffic = workspace:FindFirstChild("AITraffic")
     if traffic then
         for _, npc in ipairs(traffic:GetChildren()) do
@@ -78,23 +77,25 @@ local function StopFarm()
         end
     end
 
-    -- Visual Update
     farming = false
     ToggleBtn.Text = "START FARM"
-    ToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113) -- Green
+    ToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
 end
 
 local function StartFarm()
-    local car = workspace.AVehicleStorage:WaitForChild(CAR_NAME)
+    -- FIX: Update the target car to the current player's name
+    CAR_NAME = player.Name 
+    local car = workspace.AVehicleStorage:WaitForChild(CAR_NAME, 5) -- Added timeout to prevent infinite hang
+    
+    if not car then
+        warn("Car not found! Make sure you have spawned a vehicle.")
+        return
+    end
+
     local seat = car:FindFirstChildWhichIsA("VehicleSeat", true)
     local traffic = workspace:WaitForChild("AITraffic")
 
-    if not seat then 
-        warn("Car/Seat not found!") 
-        return 
-    end
-
-    -- A. Initial Physics Reset
+    -- Physics Reset
     for _, p in ipairs(car:GetDescendants()) do
         if p:IsA("BasePart") then
             p.Anchored = false 
@@ -106,24 +107,20 @@ local function StartFarm()
     
     farming = true
     ToggleBtn.Text = "STOP FARM"
-    ToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60) -- Red
+    ToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
     
-    -- B. The Heartbeat Loop
     heartBeatConnection = RunService.Heartbeat:Connect(function()
-        if not farming then return end -- Safety check
+        if not farming then return end
         
         if seat then
-            -- Velocity Lock
             seat.AssemblyLinearVelocity = DIRECTION * DRIVE_SPEED
             seat.AssemblyAngularVelocity = Vector3.zero
             
-            -- CFrame Lock (X/Y Only)
             local currentZ = seat.Position.Z
             seat.CFrame = CFrame.new(START_POS.X, 8, currentZ) * CFrame.Angles(0, 0, 0)
             seat.Throttle = 1
         end
 
-        -- Ghost Traffic
         if traffic then
             for _, npc in ipairs(traffic:GetChildren()) do
                 for _, part in ipairs(npc:GetDescendants()) do
@@ -144,4 +141,6 @@ ToggleBtn.MouseButton1Click:Connect(function()
     else
         StartFarm()
     end
+end)
+
 end)
