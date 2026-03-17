@@ -142,5 +142,3 @@ ToggleBtn.MouseButton1Click:Connect(function()
         StartFarm()
     end
 end)
-
-end)
