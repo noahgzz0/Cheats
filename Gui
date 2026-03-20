@@ -7,27 +7,6 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 
 -- ==========================================================
--- [KEY SYSTEM CONFIGURATION]
--- ==========================================================
-local FILE_NAME = "CorsaAuth.txt"
-local LOCK_FILE = "CorsaLocks.txt"
-
--- 1. STANDARD 24H KEYS
-local STANDARD_KEYS = {
-    "CORSA-2026",
-    "CORSA-9X2M-7B4Q", "CORSA-3L8P-2W9V", "CORSA-5K1J-8R4T", "CORSA-6N3M-9B2X"
-}
-
--- 2. PERMANENT KEYS
-local PERM_KEYS = {
-    "CORSA-PERM-9A2Z", "CORSA-PERM-3B8X", "CORSA-PERM-7C4V", "CORSA-PERM-5D1Q", "CORSA-PERM-2E9W",
-    "CORSA-PERM-8F3R", "CORSA-PERM-6G5T", "CORSA-PERM-4H7Y", "CORSA-PERM-1J2U", "CORSA-PERM-9K6I",
-    "CORSA-PERM-3L8O", "CORSA-PERM-7M4P", "CORSA-PERM-5N1A", "CORSA-PERM-2O9S", "CORSA-PERM-8P3D",
-    "CORSA-PERM-6Q5F", "CORSA-PERM-4R7G", "CORSA-PERM-1S2H", "CORSA-PERM-9T6J", "CORSA-PERM-3U8K",
-    "CORSA-PERM-7V4L", "CORSA-PERM-5W1Z", "CORSA-PERM-2X9C", "CORSA-PERM-8Y3V", "CORSA-PERM-6Z5B"
-}
-
--- ==========================================================
 -- [MAIN SCRIPT CONFIGURATION]
 -- ==========================================================
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -64,557 +43,316 @@ end
 ScreenGui.Name = "CorsaSystem"
 
 -- ==========================================================
--- [HWID FUNCTIONS]
--- ==========================================================
-
-local function GetHWID()
-    if gethwid then return gethwid() end
-    if syn and syn.get_hwid then return syn.get_hwid() end
-    return nil
-end
-
-local function LoadLocks()
-    local locks = {}
-    if isfile and isfile(LOCK_FILE) then
-        local content = readfile(LOCK_FILE)
-        for line in content:gmatch("[^\n]+") do
-            local key, hwid, ts, ktype = line:match("^(.+)=(.+)|(%d+)|(.+)$")
-            if key then
-                locks[key] = { hwid = hwid, time = tonumber(ts), ktype = ktype }
-            end
-        end
-    end
-    return locks
-end
-
-local function SaveLocks(locks)
-    if not writefile then return end
-    local lines = {}
-    for key, data in pairs(locks) do
-        table.insert(lines, key .. "=" .. data.hwid .. "|" .. tostring(data.time) .. "|" .. data.ktype)
-    end
-    writefile(LOCK_FILE, table.concat(lines, "\n"))
-end
-
-local function CheckSavedKey()
-    if not isfile or not readfile then return false end
-    if not isfile(FILE_NAME) then return false end
-    local content = readfile(FILE_NAME)
-    local savedHWID, ktype, ts = content:match("^(.+)|(.+)|(%d+)$")
-    if not savedHWID then return false end
-    local currentHWID = GetHWID()
-    if not currentHWID or savedHWID ~= currentHWID then return false end
-    if ktype == "PERMANENT" then return true end
-    if ktype == "24H" and (os.time() - tonumber(ts)) < 86400 then return true end
-    return false
-end
-
-local function SaveSession(ktype)
-    if not writefile then return end
-    local hwid = GetHWID()
-    if not hwid then return end
-    writefile(FILE_NAME, hwid .. "|" .. ktype .. "|" .. tostring(os.time()))
-end
-
-local function ValidateKey(inputKey)
-    local currentHWID = GetHWID()
-    if not currentHWID then
-        return false, "UNSUPPORTED EXECUTOR"
-    end
-
-    local locks = LoadLocks()
-
-    local is24h = false
-    for _, k in pairs(STANDARD_KEYS) do
-        if inputKey == k then is24h = true break end
-    end
-
-    local isPerm = false
-    if not is24h then
-        for _, k in pairs(PERM_KEYS) do
-            if inputKey == k then isPerm = true break end
-        end
-    end
-
-    if not is24h and not isPerm then
-        return false, "INVALID KEY"
-    end
-
-    local lockData = locks[inputKey]
-    if lockData then
-        if lockData.hwid ~= currentHWID then
-            return false, "KEY LOCKED TO\nANOTHER DEVICE"
-        end
-        if lockData.ktype == "24H" and (os.time() - lockData.time) >= 86400 then
-            locks[inputKey] = nil
-            SaveLocks(locks)
-            return false, "KEY EXPIRED"
-        end
-    else
-        locks[inputKey] = {
-            hwid = currentHWID,
-            time = os.time(),
-            ktype = isPerm and "PERMANENT" or "24H"
-        }
-        SaveLocks(locks)
-    end
-
-    return true, isPerm and "PERMANENT" or "24H"
-end
-
--- ==========================================================
 -- [MAIN HUB]
 -- ==========================================================
 
-local function LoadMainHub()
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(0, 340, 0, 450)
-    Frame.Position = UDim2.new(0.5, -170, 0.5, -225)
-    Frame.BackgroundColor3 = COLORS.Bg
-    Frame.BorderSizePixel = 0
-    Frame.Active = true
-    Frame.Draggable = true
-    Frame.Parent = ScreenGui
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 340, 0, 450)
+Frame.Position = UDim2.new(0.5, -170, 0.5, -225)
+Frame.BackgroundColor3 = COLORS.Bg
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
 
-    Frame.Size = UDim2.new(0, 0, 0, 0)
-    TweenService:Create(Frame, TweenInfo.new(0.5, Enum.EasingStyle.Back), {Size = UDim2.new(0, 340, 0, 450)}):Play()
+Frame.Size = UDim2.new(0, 0, 0, 0)
+TweenService:Create(Frame, TweenInfo.new(0.5, Enum.EasingStyle.Back), {Size = UDim2.new(0, 340, 0, 450)}):Play()
 
-    local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(0, 8)
-    UICorner.Parent = Frame
-    local UIStroke = Instance.new("UIStroke")
-    UIStroke.Color = COLORS.Border
-    UIStroke.Thickness = 2
-    UIStroke.Parent = Frame
-    local UIPadding = Instance.new("UIPadding")
-    UIPadding.PaddingTop = UDim.new(0, 15)
-    UIPadding.PaddingBottom = UDim.new(0, 15)
-    UIPadding.PaddingLeft = UDim.new(0, 15)
-    UIPadding.PaddingRight = UDim.new(0, 15)
-    UIPadding.Parent = Frame
-    local MainLayout = Instance.new("UIListLayout")
-    MainLayout.Parent = Frame
-    MainLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    MainLayout.Padding = UDim.new(0, 12)
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = Frame
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = COLORS.Border
+UIStroke.Thickness = 2
+UIStroke.Parent = Frame
+local UIPadding = Instance.new("UIPadding")
+UIPadding.PaddingTop = UDim.new(0, 15)
+UIPadding.PaddingBottom = UDim.new(0, 15)
+UIPadding.PaddingLeft = UDim.new(0, 15)
+UIPadding.PaddingRight = UDim.new(0, 15)
+UIPadding.Parent = Frame
+local MainLayout = Instance.new("UIListLayout")
+MainLayout.Parent = Frame
+MainLayout.SortOrder = Enum.SortOrder.LayoutOrder
+MainLayout.Padding = UDim.new(0, 12)
 
-    local Title = Instance.new("TextLabel")
-    Title.LayoutOrder = 1
-    Title.Size = UDim2.new(1, 0, 0, 25)
-    Title.BackgroundTransparency = 1
-    Title.Text = "CORSA HUB X"
-    Title.TextColor3 = COLORS.Text
-    Title.Font = Enum.Font.GothamBlack
-    Title.TextSize = 20
-    Title.TextXAlignment = Enum.TextXAlignment.Left
-    Title.Parent = Frame
+local Title = Instance.new("TextLabel")
+Title.LayoutOrder = 1
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.BackgroundTransparency = 1
+Title.Text = "CORSA HUB X"
+Title.TextColor3 = COLORS.Text
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 20
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Frame
 
-    local TabContainer = Instance.new("Frame")
-    TabContainer.LayoutOrder = 2
-    TabContainer.Size = UDim2.new(1, 0, 0, 35)
-    TabContainer.BackgroundTransparency = 1
-    TabContainer.Parent = Frame
-    local TabObjLayout = Instance.new("UIListLayout")
-    TabObjLayout.FillDirection = Enum.FillDirection.Horizontal
-    TabObjLayout.Padding = UDim.new(0, 5)
-    TabObjLayout.Parent = TabContainer
+local TabContainer = Instance.new("Frame")
+TabContainer.LayoutOrder = 2
+TabContainer.Size = UDim2.new(1, 0, 0, 35)
+TabContainer.BackgroundTransparency = 1
+TabContainer.Parent = Frame
+local TabObjLayout = Instance.new("UIListLayout")
+TabObjLayout.FillDirection = Enum.FillDirection.Horizontal
+TabObjLayout.Padding = UDim.new(0, 5)
+TabObjLayout.Parent = TabContainer
 
-    local function createTab(name)
-        local btn = Instance.new("TextButton")
-        btn.Name = name
-        btn.Parent = TabContainer
-        btn.Size = UDim2.new(0.23, 0, 1, 0)
-        btn.BackgroundColor3 = COLORS.Element
-        btn.Text = name
-        btn.TextColor3 = COLORS.Text
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 11
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 6)
-        corner.Parent = btn
-        return btn
+local function createTab(name)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = TabContainer
+    btn.Size = UDim2.new(0.23, 0, 1, 0)
+    btn.BackgroundColor3 = COLORS.Element
+    btn.Text = name
+    btn.TextColor3 = COLORS.Text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+    return btn
+end
+
+local BtnImport = createTab("Import")
+local BtnFusion = createTab("Fusion")
+local BtnParts  = createTab("Parts")
+local BtnFarm   = createTab("FARM")
+
+local PageContainer = Instance.new("Frame")
+PageContainer.LayoutOrder = 3
+PageContainer.Size = UDim2.new(1, 0, 0, 100)
+PageContainer.BackgroundTransparency = 1
+PageContainer.Parent = Frame
+
+local CratePage = Instance.new("Frame")
+CratePage.Size = UDim2.new(1, 0, 1, 0)
+CratePage.BackgroundTransparency = 1
+CratePage.Visible = true
+CratePage.Parent = PageContainer
+local CrateLayout = Instance.new("UIListLayout")
+CrateLayout.Padding = UDim.new(0, 10)
+CrateLayout.Parent = CratePage
+
+local Input = Instance.new("TextBox")
+Input.Size = UDim2.new(1, 0, 0, 40)
+Input.BackgroundColor3 = COLORS.Element
+Input.PlaceholderText = "Quantity (e.g. 50)"
+Input.PlaceholderColor3 = COLORS.SubText
+Input.Text = ""
+Input.TextColor3 = COLORS.Text
+Input.Font = Enum.Font.GothamBold
+Input.TextSize = 14
+Input.Parent = CratePage
+Instance.new("UICorner", Input).CornerRadius = UDim.new(0, 6)
+
+local BuyBtn = Instance.new("TextButton")
+BuyBtn.Size = UDim2.new(1, 0, 0, 45)
+BuyBtn.BackgroundColor3 = COLORS.Accent
+BuyBtn.Text = "PURCHASE CRATES"
+BuyBtn.TextColor3 = COLORS.Text
+BuyBtn.Font = Enum.Font.GothamBlack
+BuyBtn.TextSize = 14
+BuyBtn.Parent = CratePage
+Instance.new("UICorner", BuyBtn).CornerRadius = UDim.new(0, 6)
+
+local FarmPage = Instance.new("Frame")
+FarmPage.Size = UDim2.new(1, 0, 1, 0)
+FarmPage.BackgroundTransparency = 1
+FarmPage.Visible = false
+FarmPage.Parent = PageContainer
+local FarmStatus = Instance.new("TextLabel")
+FarmStatus.Size = UDim2.new(1, 0, 0, 30)
+FarmStatus.BackgroundTransparency = 1
+FarmStatus.Text = "STATUS: IDLE"
+FarmStatus.TextColor3 = COLORS.SubText
+FarmStatus.Font = Enum.Font.GothamBold
+FarmStatus.TextSize = 14
+FarmStatus.Parent = FarmPage
+local FarmToggle = Instance.new("TextButton")
+FarmToggle.Size = UDim2.new(1, 0, 0, 50)
+FarmToggle.Position = UDim2.new(0, 0, 0.4, 0)
+FarmToggle.BackgroundColor3 = COLORS.Success
+FarmToggle.Text = "ENABLE AUTOFARM"
+FarmToggle.TextColor3 = COLORS.Text
+FarmToggle.Font = Enum.Font.GothamBlack
+FarmToggle.TextSize = 16
+FarmToggle.Parent = FarmPage
+Instance.new("UICorner", FarmToggle).CornerRadius = UDim.new(0, 6)
+
+local LogLabel = Instance.new("TextLabel")
+LogLabel.LayoutOrder = 4
+LogLabel.Size = UDim2.new(1, 0, 0, 15)
+LogLabel.BackgroundTransparency = 1
+LogLabel.Text = "SYSTEM LOGS"
+LogLabel.TextColor3 = COLORS.SubText
+LogLabel.Font = Enum.Font.GothamBold
+LogLabel.TextSize = 10
+LogLabel.TextXAlignment = Enum.TextXAlignment.Left
+LogLabel.Parent = Frame
+
+local LogContainer = Instance.new("Frame")
+LogContainer.LayoutOrder = 5
+LogContainer.Size = UDim2.new(1, 0, 1, -210)
+LogContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+LogContainer.Parent = Frame
+Instance.new("UICorner", LogContainer).CornerRadius = UDim.new(0, 6)
+local LogStroke = Instance.new("UIStroke")
+LogStroke.Color = COLORS.Border
+LogStroke.Thickness = 1
+LogStroke.Parent = LogContainer
+
+local LogBox = Instance.new("TextBox")
+LogBox.Size = UDim2.new(1, -10, 1, -10)
+LogBox.Position = UDim2.new(0, 5, 0, 5)
+LogBox.BackgroundTransparency = 1
+LogBox.TextColor3 = Color3.fromRGB(200, 200, 200)
+LogBox.Font = Enum.Font.Code
+LogBox.TextSize = 11
+LogBox.TextXAlignment = Enum.TextXAlignment.Left
+LogBox.TextYAlignment = Enum.TextYAlignment.Top
+LogBox.MultiLine = true
+LogBox.TextWrapped = true
+LogBox.ClearTextOnFocus = false
+LogBox.TextEditable = false
+LogBox.Text = "-- Corsa Hub X Ready --"
+LogBox.Parent = LogContainer
+
+local currentRemote = RemoteImport
+local farming = false
+local farmConnection = nil
+
+local function AddLog(text)
+    LogBox.Text = LogBox.Text .. "\n> " .. text
+    LogBox.CursorPosition = #LogBox.Text + 1
+end
+
+local function ParseResult(data)
+    local packet = data
+    if type(data) == "table" and data[1] then packet = data[1] end
+    if type(packet) == "table" then
+        local name = packet.Item or packet.Vehicle or packet.Car or packet.Part or packet.Name
+        local rarity = packet.Rarity or packet.Type
+        if name then
+            return tostring(name) .. (rarity and (" ["..tostring(rarity).."]") or "")
+        end
+        return HttpService:JSONEncode(packet)
     end
+    return tostring(packet)
+end
 
-    local BtnImport = createTab("Import")
-    local BtnFusion = createTab("Fusion")
-    local BtnParts  = createTab("Parts")
-    local BtnFarm   = createTab("FARM")
+local function SwitchTab(mode, remote, btn)
+    BtnImport.BackgroundColor3 = COLORS.Element
+    BtnFusion.BackgroundColor3 = COLORS.Element
+    BtnParts.BackgroundColor3 = COLORS.Element
+    BtnFarm.BackgroundColor3 = COLORS.Element
+    btn.BackgroundColor3 = (mode == "Farm") and COLORS.Success or COLORS.Accent
+    if mode == "Farm" then
+        CratePage.Visible = false
+        FarmPage.Visible = true
+        currentRemote = nil
+    else
+        CratePage.Visible = true
+        FarmPage.Visible = false
+        currentRemote = remote
+    end
+end
 
-    local PageContainer = Instance.new("Frame")
-    PageContainer.LayoutOrder = 3
-    PageContainer.Size = UDim2.new(1, 0, 0, 100)
-    PageContainer.BackgroundTransparency = 1
-    PageContainer.Parent = Frame
+BtnImport.MouseButton1Click:Connect(function() SwitchTab("Crate", RemoteImport, BtnImport) end)
+BtnFusion.MouseButton1Click:Connect(function() SwitchTab("Crate", RemoteFusion, BtnFusion) end)
+BtnParts.MouseButton1Click:Connect(function() SwitchTab("Crate", RemoteParts, BtnParts) end)
+BtnFarm.MouseButton1Click:Connect(function() SwitchTab("Farm", nil, BtnFarm) end)
+SwitchTab("Crate", RemoteImport, BtnImport)
 
-    local CratePage = Instance.new("Frame")
-    CratePage.Size = UDim2.new(1, 0, 1, 0)
-    CratePage.BackgroundTransparency = 1
-    CratePage.Visible = true
-    CratePage.Parent = PageContainer
-    local CrateLayout = Instance.new("UIListLayout")
-    CrateLayout.Padding = UDim.new(0, 10)
-    CrateLayout.Parent = CratePage
-
-    local Input = Instance.new("TextBox")
-    Input.Size = UDim2.new(1, 0, 0, 40)
-    Input.BackgroundColor3 = COLORS.Element
-    Input.PlaceholderText = "Quantity (e.g. 50)"
-    Input.PlaceholderColor3 = COLORS.SubText
-    Input.Text = ""
-    Input.TextColor3 = COLORS.Text
-    Input.Font = Enum.Font.GothamBold
-    Input.TextSize = 14
-    Input.Parent = CratePage
-    Instance.new("UICorner", Input).CornerRadius = UDim.new(0, 6)
-
-    local BuyBtn = Instance.new("TextButton")
-    BuyBtn.Size = UDim2.new(1, 0, 0, 45)
-    BuyBtn.BackgroundColor3 = COLORS.Accent
+BuyBtn.MouseButton1Click:Connect(function()
+    local amount = tonumber(Input.Text)
+    if not amount then return end
+    LogBox.Text = "-- Buying " .. amount .. " Items --"
+    BuyBtn.Text = "PROCESSING..."
+    BuyBtn.BackgroundColor3 = Color3.fromRGB(241, 196, 15)
+    for i = 1, amount do
+        if CratePage.Visible == false then break end
+        task.spawn(function()
+            if currentRemote then
+                local success, result = pcall(function()
+                    return currentRemote:InvokeServer(unpack(CRATE_ARGS))
+                end)
+                if success then AddLog(ParseResult(result)) else AddLog("Failed") end
+            end
+        end)
+        task.wait(CRATE_DELAY)
+    end
+    BuyBtn.Text = "DONE!"
+    BuyBtn.BackgroundColor3 = COLORS.Success
+    task.wait(1)
     BuyBtn.Text = "PURCHASE CRATES"
-    BuyBtn.TextColor3 = COLORS.Text
-    BuyBtn.Font = Enum.Font.GothamBlack
-    BuyBtn.TextSize = 14
-    BuyBtn.Parent = CratePage
-    Instance.new("UICorner", BuyBtn).CornerRadius = UDim.new(0, 6)
+    BuyBtn.BackgroundColor3 = COLORS.Accent
+end)
 
-    local FarmPage = Instance.new("Frame")
-    FarmPage.Size = UDim2.new(1, 0, 1, 0)
-    FarmPage.BackgroundTransparency = 1
-    FarmPage.Visible = false
-    FarmPage.Parent = PageContainer
-    local FarmStatus = Instance.new("TextLabel")
-    FarmStatus.Size = UDim2.new(1, 0, 0, 30)
-    FarmStatus.BackgroundTransparency = 1
+local function StopFarm()
+    if farmConnection then farmConnection:Disconnect() farmConnection = nil end
+    local carName = player.Name
+    local car = workspace.AVehicleStorage:FindFirstChild(carName)
+    local seat = car and car:FindFirstChildWhichIsA("VehicleSeat", true)
+    if seat then
+        seat.AssemblyLinearVelocity = Vector3.zero
+        seat.AssemblyAngularVelocity = Vector3.zero
+        seat.Anchored = true
+        task.wait(0.1)
+        seat.Anchored = false
+    end
+    local traffic = workspace:FindFirstChild("AITraffic")
+    if traffic then
+        for _, npc in ipairs(traffic:GetChildren()) do
+            for _, part in ipairs(npc:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanTouch = true part.CanCollide = true end
+            end
+        end
+    end
+    farming = false
+    FarmToggle.Text = "ENABLE AUTOFARM"
+    FarmToggle.BackgroundColor3 = COLORS.Success
     FarmStatus.Text = "STATUS: IDLE"
     FarmStatus.TextColor3 = COLORS.SubText
-    FarmStatus.Font = Enum.Font.GothamBold
-    FarmStatus.TextSize = 14
-    FarmStatus.Parent = FarmPage
-    local FarmToggle = Instance.new("TextButton")
-    FarmToggle.Size = UDim2.new(1, 0, 0, 50)
-    FarmToggle.Position = UDim2.new(0, 0, 0.4, 0)
-    FarmToggle.BackgroundColor3 = COLORS.Success
-    FarmToggle.Text = "ENABLE AUTOFARM"
-    FarmToggle.TextColor3 = COLORS.Text
-    FarmToggle.Font = Enum.Font.GothamBlack
-    FarmToggle.TextSize = 16
-    FarmToggle.Parent = FarmPage
-    Instance.new("UICorner", FarmToggle).CornerRadius = UDim.new(0, 6)
+    AddLog("Autofarm Stopped.")
+end
 
-    local LogLabel = Instance.new("TextLabel")
-    LogLabel.LayoutOrder = 4
-    LogLabel.Size = UDim2.new(1, 0, 0, 15)
-    LogLabel.BackgroundTransparency = 1
-    LogLabel.Text = "SYSTEM LOGS"
-    LogLabel.TextColor3 = COLORS.SubText
-    LogLabel.Font = Enum.Font.GothamBold
-    LogLabel.TextSize = 10
-    LogLabel.TextXAlignment = Enum.TextXAlignment.Left
-    LogLabel.Parent = Frame
-
-    local LogContainer = Instance.new("Frame")
-    LogContainer.LayoutOrder = 5
-    LogContainer.Size = UDim2.new(1, 0, 1, -210)
-    LogContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    LogContainer.Parent = Frame
-    Instance.new("UICorner", LogContainer).CornerRadius = UDim.new(0, 6)
-    local LogStroke = Instance.new("UIStroke")
-    LogStroke.Color = COLORS.Border
-    LogStroke.Thickness = 1
-    LogStroke.Parent = LogContainer
-
-    local LogBox = Instance.new("TextBox")
-    LogBox.Size = UDim2.new(1, -10, 1, -10)
-    LogBox.Position = UDim2.new(0, 5, 0, 5)
-    LogBox.BackgroundTransparency = 1
-    LogBox.TextColor3 = Color3.fromRGB(200, 200, 200)
-    LogBox.Font = Enum.Font.Code
-    LogBox.TextSize = 11
-    LogBox.TextXAlignment = Enum.TextXAlignment.Left
-    LogBox.TextYAlignment = Enum.TextYAlignment.Top
-    LogBox.MultiLine = true
-    LogBox.TextWrapped = true
-    LogBox.ClearTextOnFocus = false
-    LogBox.TextEditable = false
-    LogBox.Text = "-- Corsa Hub X Ready --"
-    LogBox.Parent = LogContainer
-
-    local currentRemote = RemoteImport
-    local farming = false
-    local farmConnection = nil
-
-    local function AddLog(text)
-        LogBox.Text = LogBox.Text .. "\n> " .. text
-        LogBox.CursorPosition = #LogBox.Text + 1
-    end
-
-    local function ParseResult(data)
-        local packet = data
-        if type(data) == "table" and data[1] then packet = data[1] end
-        if type(packet) == "table" then
-            local name = packet.Item or packet.Vehicle or packet.Car or packet.Part or packet.Name
-            local rarity = packet.Rarity or packet.Type
-            if name then
-                return tostring(name) .. (rarity and (" ["..tostring(rarity).."]") or "")
-            end
-            return HttpService:JSONEncode(packet)
-        end
-        return tostring(packet)
-    end
-
-    local function SwitchTab(mode, remote, btn)
-        BtnImport.BackgroundColor3 = COLORS.Element
-        BtnFusion.BackgroundColor3 = COLORS.Element
-        BtnParts.BackgroundColor3 = COLORS.Element
-        BtnFarm.BackgroundColor3 = COLORS.Element
-        btn.BackgroundColor3 = (mode == "Farm") and COLORS.Success or COLORS.Accent
-        if mode == "Farm" then
-            CratePage.Visible = false
-            FarmPage.Visible = true
-            currentRemote = nil
-        else
-            CratePage.Visible = true
-            FarmPage.Visible = false
-            currentRemote = remote
+local function StartFarm()
+    local carName = player.Name
+    local car = workspace.AVehicleStorage:WaitForChild(carName, 5)
+    if not car then AddLog("Error: Car not found!") return end
+    local seat = car:FindFirstChildWhichIsA("VehicleSeat", true)
+    local traffic = workspace:WaitForChild("AITraffic")
+    for _, p in ipairs(car:GetDescendants()) do
+        if p:IsA("BasePart") then
+            p.Anchored = false p.CanCollide = false
+            p.AssemblyLinearVelocity = Vector3.zero p.AssemblyAngularVelocity = Vector3.zero
         end
     end
-
-    BtnImport.MouseButton1Click:Connect(function() SwitchTab("Crate", RemoteImport, BtnImport) end)
-    BtnFusion.MouseButton1Click:Connect(function() SwitchTab("Crate", RemoteFusion, BtnFusion) end)
-    BtnParts.MouseButton1Click:Connect(function() SwitchTab("Crate", RemoteParts, BtnParts) end)
-    BtnFarm.MouseButton1Click:Connect(function() SwitchTab("Farm", nil, BtnFarm) end)
-    SwitchTab("Crate", RemoteImport, BtnImport)
-
-    BuyBtn.MouseButton1Click:Connect(function()
-        local amount = tonumber(Input.Text)
-        if not amount then return end
-        LogBox.Text = "-- Buying " .. amount .. " Items --"
-        BuyBtn.Text = "PROCESSING..."
-        BuyBtn.BackgroundColor3 = Color3.fromRGB(241, 196, 15)
-        for i = 1, amount do
-            if CratePage.Visible == false then break end
-            task.spawn(function()
-                if currentRemote then
-                    local success, result = pcall(function()
-                        return currentRemote:InvokeServer(unpack(CRATE_ARGS))
-                    end)
-                    if success then AddLog(ParseResult(result)) else AddLog("Failed") end
-                end
-            end)
-            task.wait(CRATE_DELAY)
-        end
-        BuyBtn.Text = "DONE!"
-        BuyBtn.BackgroundColor3 = COLORS.Success
-        task.wait(1)
-        BuyBtn.Text = "PURCHASE CRATES"
-        BuyBtn.BackgroundColor3 = COLORS.Accent
-    end)
-
-    local function StopFarm()
-        if farmConnection then farmConnection:Disconnect() farmConnection = nil end
-        local carName = player.Name
-        local car = workspace.AVehicleStorage:FindFirstChild(carName)
-        local seat = car and car:FindFirstChildWhichIsA("VehicleSeat", true)
+    farming = true
+    FarmToggle.Text = "STOP AUTOFARM"
+    FarmToggle.BackgroundColor3 = COLORS.Danger
+    FarmStatus.Text = "STATUS: RUNNING..."
+    FarmStatus.TextColor3 = COLORS.Success
+    AddLog("Autofarm Started!")
+    farmConnection = RunService.Heartbeat:Connect(function()
+        if not farming then return end
         if seat then
-            seat.AssemblyLinearVelocity = Vector3.zero
+            seat.AssemblyLinearVelocity = FARM_DIRECTION * FARM_SPEED
             seat.AssemblyAngularVelocity = Vector3.zero
-            seat.Anchored = true
-            task.wait(0.1)
-            seat.Anchored = false
+            local currentZ = seat.Position.Z
+            seat.CFrame = CFrame.new(FARM_START_POS.X, 8, currentZ) * CFrame.Angles(0, 0, 0)
+            seat.Throttle = 1
         end
-        local traffic = workspace:FindFirstChild("AITraffic")
         if traffic then
             for _, npc in ipairs(traffic:GetChildren()) do
                 for _, part in ipairs(npc:GetDescendants()) do
-                    if part:IsA("BasePart") then part.CanTouch = true part.CanCollide = true end
+                    if part:IsA("BasePart") then part.CanTouch = false part.CanCollide = false end
                 end
             end
         end
-        farming = false
-        FarmToggle.Text = "ENABLE AUTOFARM"
-        FarmToggle.BackgroundColor3 = COLORS.Success
-        FarmStatus.Text = "STATUS: IDLE"
-        FarmStatus.TextColor3 = COLORS.SubText
-        AddLog("Autofarm Stopped.")
-    end
-
-    local function StartFarm()
-        local carName = player.Name
-        local car = workspace.AVehicleStorage:WaitForChild(carName, 5)
-        if not car then AddLog("Error: Car not found!") return end
-        local seat = car:FindFirstChildWhichIsA("VehicleSeat", true)
-        local traffic = workspace:WaitForChild("AITraffic")
-        for _, p in ipairs(car:GetDescendants()) do
-            if p:IsA("BasePart") then
-                p.Anchored = false p.CanCollide = false
-                p.AssemblyLinearVelocity = Vector3.zero p.AssemblyAngularVelocity = Vector3.zero
-            end
-        end
-        farming = true
-        FarmToggle.Text = "STOP AUTOFARM"
-        FarmToggle.BackgroundColor3 = COLORS.Danger
-        FarmStatus.Text = "STATUS: RUNNING..."
-        FarmStatus.TextColor3 = COLORS.Success
-        AddLog("Autofarm Started!")
-        farmConnection = RunService.Heartbeat:Connect(function()
-            if not farming then return end
-            if seat then
-                seat.AssemblyLinearVelocity = FARM_DIRECTION * FARM_SPEED
-                seat.AssemblyAngularVelocity = Vector3.zero
-                local currentZ = seat.Position.Z
-                seat.CFrame = CFrame.new(FARM_START_POS.X, 8, currentZ) * CFrame.Angles(0, 0, 0)
-                seat.Throttle = 1
-            end
-            if traffic then
-                for _, npc in ipairs(traffic:GetChildren()) do
-                    for _, part in ipairs(npc:GetDescendants()) do
-                        if part:IsA("BasePart") then part.CanTouch = false part.CanCollide = false end
-                    end
-                end
-            end
-        end)
-    end
-
-    FarmToggle.MouseButton1Click:Connect(function()
-        if farming then StopFarm() else StartFarm() end
     end)
 end
 
--- ==========================================================
--- [KEY SYSTEM UI & LOGIC]
--- ==========================================================
-
-if CheckSavedKey() then
-    LoadMainHub()
-else
-    local KeyFrame = Instance.new("Frame")
-    KeyFrame.Size = UDim2.new(0, 320, 0, 230)
-    KeyFrame.Position = UDim2.new(0.5, -160, 0.5, -115)
-    KeyFrame.BackgroundColor3 = COLORS.Bg
-    KeyFrame.BorderSizePixel = 0
-    KeyFrame.Active = true
-    KeyFrame.Draggable = true
-    KeyFrame.Parent = ScreenGui
-
-    Instance.new("UICorner", KeyFrame).CornerRadius = UDim.new(0, 8)
-    local KeyStroke = Instance.new("UIStroke")
-    KeyStroke.Color = COLORS.Border
-    KeyStroke.Thickness = 2
-    KeyStroke.Parent = KeyFrame
-    local KeyPadding = Instance.new("UIPadding")
-    KeyPadding.PaddingTop = UDim.new(0, 15)
-    KeyPadding.PaddingBottom = UDim.new(0, 15)
-    KeyPadding.PaddingLeft = UDim.new(0, 15)
-    KeyPadding.PaddingRight = UDim.new(0, 15)
-    KeyPadding.Parent = KeyFrame
-    local KeyLayout = Instance.new("UIListLayout")
-    KeyLayout.Parent = KeyFrame
-    KeyLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    KeyLayout.Padding = UDim.new(0, 10)
-
-    local KTitle = Instance.new("TextLabel")
-    KTitle.LayoutOrder = 1
-    KTitle.Size = UDim2.new(1, 0, 0, 25)
-    KTitle.BackgroundTransparency = 1
-    KTitle.Text = "SECURITY CHECK"
-    KTitle.TextColor3 = COLORS.Text
-    KTitle.Font = Enum.Font.GothamBlack
-    KTitle.TextSize = 20
-    KTitle.Parent = KeyFrame
-
-    local hwid = GetHWID() or "UNSUPPORTED"
-    local KSub = Instance.new("TextLabel")
-    KSub.LayoutOrder = 2
-    KSub.Size = UDim2.new(1, 0, 0, 15)
-    KSub.BackgroundTransparency = 1
-    KSub.Text = "HWID: " .. string.sub(hwid, 1, 20) .. "..."
-    KSub.TextColor3 = COLORS.SubText
-    KSub.Font = Enum.Font.GothamBold
-    KSub.TextSize = 10
-    KSub.Parent = KeyFrame
-
-    local KInput = Instance.new("TextBox")
-    KInput.LayoutOrder = 3
-    KInput.Size = UDim2.new(1, 0, 0, 40)
-    KInput.BackgroundColor3 = COLORS.Element
-    KInput.PlaceholderText = "Enter Key"
-    KInput.PlaceholderColor3 = COLORS.SubText
-    KInput.Text = ""
-    KInput.TextColor3 = COLORS.Text
-    KInput.Font = Enum.Font.GothamBold
-    KInput.TextSize = 14
-    KInput.Parent = KeyFrame
-    Instance.new("UICorner", KInput).CornerRadius = UDim.new(0, 6)
-
-    local KBtns = Instance.new("Frame")
-    KBtns.LayoutOrder = 4
-    KBtns.Size = UDim2.new(1, 0, 0, 40)
-    KBtns.BackgroundTransparency = 1
-    KBtns.Parent = KeyFrame
-    local KBtnLayout = Instance.new("UIListLayout")
-    KBtnLayout.FillDirection = Enum.FillDirection.Horizontal
-    KBtnLayout.Padding = UDim.new(0, 10)
-    KBtnLayout.Parent = KBtns
-
-    local GetKeyBtn = Instance.new("TextButton")
-    GetKeyBtn.Size = UDim2.new(0.48, 0, 1, 0)
-    GetKeyBtn.BackgroundColor3 = COLORS.Element
-    GetKeyBtn.Text = "GET KEY"
-    GetKeyBtn.TextColor3 = COLORS.Text
-    GetKeyBtn.Font = Enum.Font.GothamBold
-    GetKeyBtn.TextSize = 12
-    GetKeyBtn.Parent = KBtns
-    Instance.new("UICorner", GetKeyBtn).CornerRadius = UDim.new(0, 6)
-
-    local CheckBtn = Instance.new("TextButton")
-    CheckBtn.Size = UDim2.new(0.48, 0, 1, 0)
-    CheckBtn.BackgroundColor3 = COLORS.Accent
-    CheckBtn.Text = "VERIFY"
-    CheckBtn.TextColor3 = COLORS.Text
-    CheckBtn.Font = Enum.Font.GothamBlack
-    CheckBtn.TextSize = 12
-    CheckBtn.Parent = KBtns
-    Instance.new("UICorner", CheckBtn).CornerRadius = UDim.new(0, 6)
-
-    local KStatus = Instance.new("TextLabel")
-    KStatus.LayoutOrder = 5
-    KStatus.Size = UDim2.new(1, 0, 0, 20)
-    KStatus.BackgroundTransparency = 1
-    KStatus.Text = ""
-    KStatus.TextColor3 = COLORS.Danger
-    KStatus.Font = Enum.Font.GothamBold
-    KStatus.TextSize = 11
-    KStatus.Parent = KeyFrame
-
-    GetKeyBtn.MouseButton1Click:Connect(function()
-        if setclipboard then
-            setclipboard("https://discord.gg/CraHUNrGvf")
-            GetKeyBtn.Text = "COPIED!"
-            task.wait(1)
-            GetKeyBtn.Text = "GET KEY"
-        end
-    end)
-
-    CheckBtn.MouseButton1Click:Connect(function()
-        local inputKey = KInput.Text
-        local valid, result = ValidateKey(inputKey)
-
-        if valid then
-            CheckBtn.Text = "SUCCESS"
-            CheckBtn.BackgroundColor3 = COLORS.Success
-            KStatus.TextColor3 = COLORS.Success
-            KStatus.Text = "Authenticated! Loading..."
-            SaveSession(result)
-            task.wait(0.5)
-            KeyFrame:Destroy()
-            LoadMainHub()
-        else
-            CheckBtn.Text = "FAILED"
-            CheckBtn.BackgroundColor3 = COLORS.Danger
-            KStatus.TextColor3 = COLORS.Danger
-            KStatus.Text = result
-            task.wait(1.5)
-            CheckBtn.Text = "VERIFY"
-            CheckBtn.BackgroundColor3 = COLORS.Accent
-        end
-    end)
-end
+FarmToggle.MouseButton1Click:Connect(function()
+    if farming then StopFarm() else StartFarm() end
+end)
