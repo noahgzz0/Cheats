@@ -40,7 +40,7 @@ if pcall(function() return CoreGui end) then
 else
     ScreenGui.Parent = player:WaitForChild("PlayerGui")
 end
-ScreenGui.Name = "CorsaSystem"
+ScreenGui.Name = "WrathSystem"
 
 -- ==========================================================
 -- [MAIN HUB]
@@ -80,7 +80,7 @@ local Title = Instance.new("TextLabel")
 Title.LayoutOrder = 1
 Title.Size = UDim2.new(1, 0, 0, 25)
 Title.BackgroundTransparency = 1
-Title.Text = "CORSA HUB X"
+Title.Text = "WRATH HUB"
 Title.TextColor3 = COLORS.Text
 Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 20
@@ -214,7 +214,7 @@ LogBox.MultiLine = true
 LogBox.TextWrapped = true
 LogBox.ClearTextOnFocus = false
 LogBox.TextEditable = false
-LogBox.Text = "-- Corsa Hub X Ready --"
+LogBox.Text = "-- Wrath Hub Ready --"
 LogBox.Parent = LogContainer
 
 local currentRemote = RemoteImport
