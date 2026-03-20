@@ -9,14 +9,13 @@ local TweenService = game:GetService("TweenService")
 -- ==========================================================
 -- [KEY SYSTEM CONFIGURATION]
 -- ==========================================================
-local KEY_URL = "https://linkvertise.com/YOUR_LINK_HERE" 
-local FILE_NAME = "CorsaAuth.txt" 
+local FILE_NAME = "CorsaAuth.txt"
+local LOCK_FILE = "CorsaLocks.txt"
 
 -- 1. STANDARD 24H KEYS
 local STANDARD_KEYS = {
-    "CORSA-2026", 
+    "CORSA-2026",
     "CORSA-9X2M-7B4Q", "CORSA-3L8P-2W9V", "CORSA-5K1J-8R4T", "CORSA-6N3M-9B2X"
-    -- Add more keys here...
 }
 
 -- 2. PERMANENT KEYS
@@ -32,13 +31,12 @@ local PERM_KEYS = {
 -- [MAIN SCRIPT CONFIGURATION]
 -- ==========================================================
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local RemoteFusion = Remotes:WaitForChild("FC") 
-local RemoteImport = Remotes:WaitForChild("IC") 
-local RemoteParts  = Remotes:WaitForChild("PC") 
-local CRATE_ARGS = { 1 } 
+local RemoteFusion = Remotes:WaitForChild("FC")
+local RemoteImport = Remotes:WaitForChild("IC")
+local RemoteParts  = Remotes:WaitForChild("PC")
+local CRATE_ARGS = { 1 }
 
--- [NEW] CRATE DELAY SETTING
-local CRATE_DELAY = 5 -- Seconds to wait between buying crates
+local CRATE_DELAY = 5
 
 local FARM_SPEED = 591
 local FARM_START_POS = Vector3.new(4846, 8, 19120)
@@ -66,7 +64,106 @@ end
 ScreenGui.Name = "CorsaSystem"
 
 -- ==========================================================
--- [CORE LOGIC (Hub Code)]
+-- [HWID FUNCTIONS]
+-- ==========================================================
+
+local function GetHWID()
+    if gethwid then return gethwid() end
+    if syn and syn.get_hwid then return syn.get_hwid() end
+    return nil
+end
+
+local function LoadLocks()
+    local locks = {}
+    if isfile and isfile(LOCK_FILE) then
+        local content = readfile(LOCK_FILE)
+        for line in content:gmatch("[^\n]+") do
+            local key, hwid, ts, ktype = line:match("^(.+)=(.+)|(%d+)|(.+)$")
+            if key then
+                locks[key] = { hwid = hwid, time = tonumber(ts), ktype = ktype }
+            end
+        end
+    end
+    return locks
+end
+
+local function SaveLocks(locks)
+    if not writefile then return end
+    local lines = {}
+    for key, data in pairs(locks) do
+        table.insert(lines, key .. "=" .. data.hwid .. "|" .. tostring(data.time) .. "|" .. data.ktype)
+    end
+    writefile(LOCK_FILE, table.concat(lines, "\n"))
+end
+
+local function CheckSavedKey()
+    if not isfile or not readfile then return false end
+    if not isfile(FILE_NAME) then return false end
+    local content = readfile(FILE_NAME)
+    local savedHWID, ktype, ts = content:match("^(.+)|(.+)|(%d+)$")
+    if not savedHWID then return false end
+    local currentHWID = GetHWID()
+    if not currentHWID or savedHWID ~= currentHWID then return false end
+    if ktype == "PERMANENT" then return true end
+    if ktype == "24H" and (os.time() - tonumber(ts)) < 86400 then return true end
+    return false
+end
+
+local function SaveSession(ktype)
+    if not writefile then return end
+    local hwid = GetHWID()
+    if not hwid then return end
+    writefile(FILE_NAME, hwid .. "|" .. ktype .. "|" .. tostring(os.time()))
+end
+
+local function ValidateKey(inputKey)
+    local currentHWID = GetHWID()
+    if not currentHWID then
+        return false, "UNSUPPORTED EXECUTOR"
+    end
+
+    local locks = LoadLocks()
+
+    local is24h = false
+    for _, k in pairs(STANDARD_KEYS) do
+        if inputKey == k then is24h = true break end
+    end
+
+    local isPerm = false
+    if not is24h then
+        for _, k in pairs(PERM_KEYS) do
+            if inputKey == k then isPerm = true break end
+        end
+    end
+
+    if not is24h and not isPerm then
+        return false, "INVALID KEY"
+    end
+
+    local lockData = locks[inputKey]
+    if lockData then
+        if lockData.hwid ~= currentHWID then
+            return false, "KEY LOCKED TO\nANOTHER DEVICE"
+        end
+        if lockData.ktype == "24H" and (os.time() - lockData.time) >= 86400 then
+            locks[inputKey] = nil
+            SaveLocks(locks)
+            return false, "KEY EXPIRED"
+        end
+    else
+        locks[inputKey] = {
+            hwid = currentHWID,
+            time = os.time(),
+            ktype = isPerm and "PERMANENT" or "24H"
+        }
+        SaveLocks(locks)
+    end
+
+    return true, isPerm and "PERMANENT" or "24H"
+end
+
+-- ==========================================================
+-- [MAIN HUB]
 -- ==========================================================
 
 local function LoadMainHub()
@@ -78,7 +175,7 @@ local function LoadMainHub()
     Frame.Active = true
     Frame.Draggable = true
     Frame.Parent = ScreenGui
-    
+
     Frame.Size = UDim2.new(0, 0, 0, 0)
     TweenService:Create(Frame, TweenInfo.new(0.5, Enum.EasingStyle.Back), {Size = UDim2.new(0, 340, 0, 450)}):Play()
 
@@ -121,7 +218,7 @@ local function LoadMainHub()
     TabObjLayout.Padding = UDim.new(0, 5)
     TabObjLayout.Parent = TabContainer
 
-    local function createTab(name, color)
+    local function createTab(name)
         local btn = Instance.new("TextButton")
         btn.Name = name
         btn.Parent = TabContainer
@@ -137,10 +234,10 @@ local function LoadMainHub()
         return btn
     end
 
-    local BtnImport = createTab("Import", COLORS.Accent)
-    local BtnFusion = createTab("Fusion", COLORS.Element)
-    local BtnParts  = createTab("Parts", COLORS.Element)
-    local BtnFarm   = createTab("FARM", COLORS.Success)
+    local BtnImport = createTab("Import")
+    local BtnFusion = createTab("Fusion")
+    local BtnParts  = createTab("Parts")
+    local BtnFarm   = createTab("FARM")
 
     local PageContainer = Instance.new("Frame")
     PageContainer.LayoutOrder = 3
@@ -219,9 +316,7 @@ local function LoadMainHub()
     LogContainer.Size = UDim2.new(1, 0, 1, -210)
     LogContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     LogContainer.Parent = Frame
-    local LogCorner = Instance.new("UICorner")
-    LogCorner.CornerRadius = UDim.new(0, 6)
-    LogCorner.Parent = LogContainer
+    Instance.new("UICorner", LogContainer).CornerRadius = UDim.new(0, 6)
     local LogStroke = Instance.new("UIStroke")
     LogStroke.Color = COLORS.Border
     LogStroke.Thickness = 1
@@ -271,8 +366,7 @@ local function LoadMainHub()
         BtnFusion.BackgroundColor3 = COLORS.Element
         BtnParts.BackgroundColor3 = COLORS.Element
         BtnFarm.BackgroundColor3 = COLORS.Element
-        btn.BackgroundColor3 = COLORS.Accent
-        if mode == "Farm" then btn.BackgroundColor3 = COLORS.Success end
+        btn.BackgroundColor3 = (mode == "Farm") and COLORS.Success or COLORS.Accent
         if mode == "Farm" then
             CratePage.Visible = false
             FarmPage.Visible = true
@@ -290,15 +384,12 @@ local function LoadMainHub()
     BtnFarm.MouseButton1Click:Connect(function() SwitchTab("Farm", nil, BtnFarm) end)
     SwitchTab("Crate", RemoteImport, BtnImport)
 
-    -- [CRATE BUY LOGIC WITH 5s DELAY]
     BuyBtn.MouseButton1Click:Connect(function()
         local amount = tonumber(Input.Text)
         if not amount then return end
-        
         LogBox.Text = "-- Buying " .. amount .. " Items --"
         BuyBtn.Text = "PROCESSING..."
         BuyBtn.BackgroundColor3 = Color3.fromRGB(241, 196, 15)
-        
         for i = 1, amount do
             if CratePage.Visible == false then break end
             task.spawn(function()
@@ -306,23 +397,16 @@ local function LoadMainHub()
                     local success, result = pcall(function()
                         return currentRemote:InvokeServer(unpack(CRATE_ARGS))
                     end)
-                    if success then 
-                        AddLog(ParseResult(result)) 
-                    else 
-                        AddLog("Failed") 
-                    end
+                    if success then AddLog(ParseResult(result)) else AddLog("Failed") end
                 end
             end)
-            
-            -- [MODIFIED] WAIT 5 SECONDS
-            task.wait(CRATE_DELAY) 
+            task.wait(CRATE_DELAY)
         end
-        
         BuyBtn.Text = "DONE!"
         BuyBtn.BackgroundColor3 = COLORS.Success
         task.wait(1)
         BuyBtn.Text = "PURCHASE CRATES"
-        BuyBtn.BackgroundColor3 = COLORS.Accent 
+        BuyBtn.BackgroundColor3 = COLORS.Accent
     end)
 
     local function StopFarm()
@@ -399,23 +483,12 @@ end
 -- [KEY SYSTEM UI & LOGIC]
 -- ==========================================================
 
-local function CheckSavedKey()
-    if not isfile or not readfile then return false end
-    if isfile(FILE_NAME) then
-        local content = readfile(FILE_NAME)
-        if content == "PERMANENT" then return true end
-        local savedTime = tonumber(content)
-        if savedTime and (os.time() - savedTime) < 86400 then return true end
-    end
-    return false
-end
-
 if CheckSavedKey() then
     LoadMainHub()
 else
     local KeyFrame = Instance.new("Frame")
-    KeyFrame.Size = UDim2.new(0, 320, 0, 220)
-    KeyFrame.Position = UDim2.new(0.5, -160, 0.5, -110)
+    KeyFrame.Size = UDim2.new(0, 320, 0, 230)
+    KeyFrame.Position = UDim2.new(0.5, -160, 0.5, -115)
     KeyFrame.BackgroundColor3 = COLORS.Bg
     KeyFrame.BorderSizePixel = 0
     KeyFrame.Active = true
@@ -448,13 +521,12 @@ else
     KTitle.TextSize = 20
     KTitle.Parent = KeyFrame
 
-    local hwid = "UNKNOWN"
-    if gethwid then hwid = gethwid() end
+    local hwid = GetHWID() or "UNSUPPORTED"
     local KSub = Instance.new("TextLabel")
     KSub.LayoutOrder = 2
     KSub.Size = UDim2.new(1, 0, 0, 15)
     KSub.BackgroundTransparency = 1
-    KSub.Text = "HWID: " .. string.sub(hwid, 1, 15) .. "..."
+    KSub.Text = "HWID: " .. string.sub(hwid, 1, 20) .. "..."
     KSub.TextColor3 = COLORS.SubText
     KSub.Font = Enum.Font.GothamBold
     KSub.TextSize = 10
@@ -503,9 +575,19 @@ else
     CheckBtn.Parent = KBtns
     Instance.new("UICorner", CheckBtn).CornerRadius = UDim.new(0, 6)
 
+    local KStatus = Instance.new("TextLabel")
+    KStatus.LayoutOrder = 5
+    KStatus.Size = UDim2.new(1, 0, 0, 20)
+    KStatus.BackgroundTransparency = 1
+    KStatus.Text = ""
+    KStatus.TextColor3 = COLORS.Danger
+    KStatus.Font = Enum.Font.GothamBold
+    KStatus.TextSize = 11
+    KStatus.Parent = KeyFrame
+
     GetKeyBtn.MouseButton1Click:Connect(function()
         if setclipboard then
-            setclipboard(KEY_URL)
+            setclipboard("https://discord.gg/CraHUNrGvf")
             GetKeyBtn.Text = "COPIED!"
             task.wait(1)
             GetKeyBtn.Text = "GET KEY"
@@ -514,32 +596,23 @@ else
 
     CheckBtn.MouseButton1Click:Connect(function()
         local inputKey = KInput.Text
-        local is24h = false
-        local isPerm = false
-        
-        for _, k in pairs(STANDARD_KEYS) do
-            if inputKey == k then is24h = true break end
-        end
-        if not is24h then
-            for _, k in pairs(PERM_KEYS) do
-                if inputKey == k then isPerm = true break end
-            end
-        end
+        local valid, result = ValidateKey(inputKey)
 
-        if is24h or isPerm then
+        if valid then
             CheckBtn.Text = "SUCCESS"
             CheckBtn.BackgroundColor3 = COLORS.Success
-            if writefile then
-                if isPerm then writefile(FILE_NAME, "PERMANENT")
-                else writefile(FILE_NAME, tostring(os.time())) end
-            end
+            KStatus.TextColor3 = COLORS.Success
+            KStatus.Text = "Authenticated! Loading..."
+            SaveSession(result)
             task.wait(0.5)
             KeyFrame:Destroy()
             LoadMainHub()
         else
-            CheckBtn.Text = "INVALID KEY"
+            CheckBtn.Text = "FAILED"
             CheckBtn.BackgroundColor3 = COLORS.Danger
-            task.wait(1)
+            KStatus.TextColor3 = COLORS.Danger
+            KStatus.Text = result
+            task.wait(1.5)
             CheckBtn.Text = "VERIFY"
             CheckBtn.BackgroundColor3 = COLORS.Accent
         end
